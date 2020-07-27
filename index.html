@@ -57,12 +57,17 @@
             <ol>
                 <li>Enter PDB ID (no chain) and clicl PARSE button. This will parse out PDB file and init chain
                     selectors.</li>
-                <li>Select <ul><li>same chain to show distances between single chain residues</li><li> different chains for
-                    between-chain distances. </li></ul></li>
-                    
+                <li>Select <ul>
+                        <li>same chain to show distances between single chain residues</li>
+                        <li> different chains for
+                            between-chain distances. </li>
+                    </ul>
+                </li>
+
                 <li>Click DISPLAY to calculate distances and display chart. At this point program will show calculated
                     min and max distances.</li>
-                <li>Adjust distance cutoff and click DISPLAY again to refresh chart. Default cutoffs: single chain - 5A, two chains - 30A</li>
+                <li>Adjust distance cutoffs and click DISPLAY again to refresh chart. Default cutoffs: single chain -
+                    5A, two chains - 30A</li>
             </ol>
         </div>
         <h2 id="pdbtitle"></h2>
@@ -85,7 +90,6 @@
                     <li>7brrB and 3iwmB - 3C-like proteinase from SARS-CoV
                     </li>
                 </ul>
-
             </div>
 
             <div id="controls" class="p-2 border border-secondary">
@@ -109,7 +113,13 @@
                         </form>
                     </div>
                     <div class="col col-6">
-                        <label for="maxDist">Distance cutoff:</label>
+                        <label for="minDist">MIN distance cutoff:</label>
+                        <div class="range-wrap">
+                            <input id="minDist" type="range" class="range" value="1" />
+                            <output class="bubble mt-4"></output>
+                        </div>
+                        <br />
+                        <label for="maxDist">MAX distance cutoff:</label>
                         <div class="range-wrap">
                             <input id="maxDist" type="range" class="range" value="5" />
                             <output class="bubble mt-4"></output>
@@ -135,6 +145,7 @@
 
     let chains; // chains for selected pdb
     let maxDist = $("#maxDist")
+    let minDist = $("#minDist")
     let divId = "chart";
     let pdbID;
 
@@ -154,6 +165,8 @@
 
     async function runPDB() {
         pdbID = $("#pdbid").val();
+
+        $( "#"+ divId).empty();
         chains = await prepare(pdbID)
         if (chains)
             console.log(chains)
@@ -164,8 +177,9 @@
         let selChains = [];
         selChains[0] = $("#chain1").val();
         selChains[1] = $("#chain2").val();
-        let dist = maxDist.val();
-        displayStructureContacts(pdbID, chains, divId, selChains, dist)
+        let mxdist = maxDist.val();
+        let mndist = minDist.val();
+        displayStructureContacts(pdbID, chains, divId, selChains, mxdist, mndist)
     }
 
     // const showSingle = function () {

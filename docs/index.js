@@ -88,6 +88,7 @@ const parsePdb = function parsePdb(pdb) {
 async function prepare(pdbID) {
     d3.select("#pdbtitle").html(pdbID)
 
+
     let url = "	https://files.rcsb.org/download/" + pdbID + ".pdb"
 
     if (pdbID === '6W9C') {
@@ -136,7 +137,7 @@ async function prepare(pdbID) {
 
 }
 
-const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDistance) {
+const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDistance, minDistance) {
     pdbID = pdbID || '6W9C';
 
     const width = 900;
@@ -148,7 +149,6 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
 
     const innerRaduis = radius - 40;
 
-
     // --------------HELPER FUNCTIONS---------------
 
     const calcExternalDistances = function (chain1, chain2, chainIDs) {
@@ -158,7 +158,7 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
         const l2 = chain2.residues.length;
 
 
-        let min = 0, max = 0;
+        let min = 100, max = 0;
 
         for (let i = 0; i < l1; i++) {
             let row = new Array(l1);
@@ -186,11 +186,9 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                 const caAtoms2 = res2.atoms.filter(a => a.name === CA);
                 if (caAtoms2.length < 1) continue;
 
-                const d = getDistanceBetweenAtoms(caAtoms1[0], caAtoms2[0])
-
-                if (i === 0 & j === 0) {
-                    min = d; max = d;
-                }
+                const d = getDistanceBetweenAtoms(caAtoms1[0], caAtoms2[0]);
+                if (d === 0)
+                    continue;
                 min = Math.min(min, d)
                 max = Math.max(max, d)
 
@@ -201,10 +199,7 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
             distances[i] = row;
 
         }
-        // console.log(`min ${min}, max:${max}`)
-
-
-        d3.select("#minmax").html(`Distances: min ${min}, max:${max}, cutoff:${MAX_EX_DISTANCE}`);
+        return [min, max]
     }
 
     const calcInternalDistances = function (chain) {
@@ -217,11 +212,11 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
         for (let i = 0; i < l; i++) {
             let row = new Array(l);
             row.fill(0);
-            // distances[i] = row;
 
             const res1 = chain.residues[i];
             res1.id = i;
             res1.links = []
+
             const caAtoms1 = res1.atoms.filter(a => a.name === CA);
             if (caAtoms1.length < 1) continue;
 
@@ -230,25 +225,18 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                 const caAtoms2 = res2.atoms.filter(a => a.name === CA);
                 if (caAtoms2.length < 1) continue;
 
-                const d = getDistanceBetweenAtoms(caAtoms1[0], caAtoms2[0])
+                const d = getDistanceBetweenAtoms(caAtoms1[0], caAtoms2[0]);
+                if (d === 0)
+                    continue;
 
-                if (i === 0 & j === 0) {
-                    min = d; max = d;
-                }
                 min = Math.min(min, d)
                 max = Math.max(max, d)
                 row[j] = d;
                 res1.links.push({ to: j, distance: d });
             }
 
-            // distances[i] = row;
-
         }
-        // chain.distances = distances;
-
-        // console.log(`min ${min}, max:${max}`)
-
-        d3.select("#minmax").html(`Distances: min ${min}, max:${max}, cutoff:${MAX_DISTANCE}`);
+        return [min, max]
     }
 
     const getDistanceBetweenAtoms = function (atom1, atom2) {
@@ -319,8 +307,6 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
             }
         });
 
-        let chords = [];
-
         residues.forEach(r => {
             r.links.forEach(l => {
                 if (l.distance >= MIN_DISTANCE && l.distance <= MAX_DISTANCE) {
@@ -340,33 +326,9 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                     })
                 }
             });
-        })
-
-        // console.log(chords);
-
-
-        var circos = new Circos({
-            container: '#' + divID,
-            width: width,
-            height: height,
         });
-        var configuration = {
-            innerRadius: innerRaduis,
-            outerRadius: radius,
-            class: "residue",
-            cornerRadius: 3,
-            gap: 0.0001, // in radian
-            labels: {
-                display: false
-            },
-            ticks: {
-                display: false
-            },
 
-        }
-
-
-        let x = circos
+        let chart = circos
             .layout(data, configuration)
             .text('labels', residues.map(function (d) {
                 return {
@@ -382,45 +344,10 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                 },
                 tooltipContent: function (d) {
                     return d.value
-                },
-                events: {
-                    'click.alert': function (datum, index, nodes, event) {
-                        window.alert(datum)
-                    }
-                }
-            })
-            .chords("l1",
-                chords, {
-                opacity: 0.4,
-                color: 'grey',
-                tooltipContent: function (d) {
-                    return '<h4>' + d.source.id + ' &gt; ' + d.target.id + ': ' + d.value + '</h4>'
                 }
             });
 
-        if (fooMutations.length) {
-            x.histogram('his', hist, {
-                innerRadius: 1.01,
-                outerRadius: 1.4,
-                color: 'YlOrRd',
-                logScale: true,
-                tooltipContent: function (d) {
-                    return d.id + ": " + d.value
-                }
-            })
-        }
-
-
-        circos.render();
-
-
-        d3.selectAll("path.chord").on("mouseover", handleMouseOver);
-        d3.selectAll("path.chord").on("mouseout", handleMouseOut);
-
-
-        d3.selectAll(".cs-layout path").on("mouseover", handleMouseOver);
-        d3.selectAll(".cs-layout path").on("mouseout", handleMouseOut);
-
+        return chart;
     }
 
     const render2 = function (chainA, chainB) {
@@ -439,11 +366,9 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
             }
         });
 
-        let chords = [];
-
         residues.forEach(r => {
             r.exlinks.forEach(l => {
-                if (l.distance > 0 && l.distance <= MAX_EX_DISTANCE) {
+                if (l.distance >= MIN_DISTANCE && l.distance <= MAX_EX_DISTANCE) {
                     const from = {
                         id: RES + r.id,
                         start: .5,
@@ -460,37 +385,15 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                     })
                 }
             });
-        })
-
-
-        let circos = new Circos({
-            container: '#' + divID,
-            width: width,
-            height: height,
         });
 
-        let configuration = {
-            innerRadius: innerRaduis,
-            outerRadius: radius,
-            class: "residue",
-            cornerRadius: 3,
-            gap: 0.0001, // in radian
-            labels: {
-                display: false
-            },
-            ticks: {
-                display: false
-            }
-        }
-
-
-        let x = circos
+        let chart = circos
             .layout(data, configuration)
             .text('labels', residues.map(function (d) {
                 return {
                     block_id: RES + d.id,
                     position: .5,
-                    value: d.chain + "|" + d.resName + ":" + (d.id + 1)
+                    value: d.chain + "-" + d.resName + ":" + (d.id + 1)
                 }
             }), {
                 innerRadius: .9,
@@ -500,43 +403,9 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
                 },
                 tooltipContent: function (d) {
                     return d.value
-                },
-                events: {
-                    'click.alert': function (datum, index, nodes, event) {
-                        window.alert(datum)
-                    }
-                }
-            })
-            .chords("l1",
-                chords, {
-                opacity: 0.4,
-                color: 'grey',
-                tooltipContent: function (d) {
-                    return '<h4>' + d.source.id + ' &gt; ' + d.target.id + ': ' + d.value + '</h4>'
                 }
             });
-
-        if (fooMutations.length) {
-            x.histogram('his', hist, {
-                innerRadius: 1.01,
-                outerRadius: 1.4,
-                color: 'YlOrRd',
-                logScale: true,
-                tooltipContent: function (d) {
-                    return d.id + ": " + d.value
-                }
-            })
-        }
-
-
-        circos.render();
-
-        d3.selectAll("path.chord").on("mouseover", handleMouseOver);
-        d3.selectAll("path.chord").on("mouseout", handleMouseOut);
-
-
-        d3.selectAll(".cs-layout path").on("mouseover", handleMouseOver);
-        d3.selectAll(".cs-layout path").on("mouseout", handleMouseOut);
+        return chart;
 
     }
 
@@ -1364,13 +1233,36 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
 
     const CA = "CA";
 
-    const MIN_DISTANCE = 0;
+    let MIN_DISTANCE = minDistance|| 0;
     let MAX_DISTANCE = maxDistance || 5;
     let MAX_EX_DISTANCE = maxDistance || 30;
 
     const RES = "res_"; // html id prefix
 
     let multiple = chainIDs[0] != chainIDs[1];
+
+    let circos = new Circos({
+        container: '#' + divID,
+        width: width,
+        height: height,
+    });
+
+
+    const configuration = {
+        innerRadius: innerRaduis,
+        outerRadius: radius,
+        class: "residue",
+        cornerRadius: 3,
+        gap: 0.0001, // in radian
+        labels: {
+            display: false
+        },
+        ticks: {
+            display: false
+        }
+    }
+
+    let chords = [];
 
     let hist = fooMutations.map(m => {
         m.block_id = RES + m.id;
@@ -1379,19 +1271,62 @@ const displayStructureContacts = function (pdbID, chains, divID, chainIDs, maxDi
         return m;
     });
 
+    let chart;
+    let distRange;
+
     if (multiple) {
         chainIDs = chainIDs ? chainIDs : ["A", "B"]
 
         const chA = chains.get(chainIDs[0])
         const chB = chains.get(chainIDs[1])
-        calcExternalDistances(chA, chB, chainIDs)
-        render2(chA, chB)
+        distRange = calcExternalDistances(chA, chB, chainIDs)
+        chart = render2(chA, chB)
     } else {
         const chA = chains.get("A")
-        calcInternalDistances(chA);
-        render(chA)
+        distRange = calcInternalDistances(chA);
+        chart = render(chA)
     }
 
+    let maxDist = $("#maxDist")
+    let minDist = $("#minDist")
+
+    maxDist.attr("min", Math.floor(distRange[0]))
+    maxDist.attr("max", Math.floor(distRange[1]))
+
+    minDist.attr("min", Math.floor(distRange[0]))
+    minDist.attr("max", Math.floor(distRange[1]))
+
+    d3.select("#minmax").html(`Distances: min ${distRange[0].toFixed(2)}, max:${distRange[1].toFixed(2)}, cutoff:${MAX_DISTANCE}`);
+
+    chart
+        .chords("l1",
+            chords, {
+            opacity: 0.4,
+            color: 'grey',
+            tooltipContent: function (d) {
+                return '<h4>' + d.source.id + ' &gt; ' + d.target.id + ': ' + d.value + '</h4>'
+            }
+        })
+
+    if (fooMutations.length) {
+        chart.histogram('his', hist, {
+            innerRadius: 1.01,
+            outerRadius: 1.4,
+            color: 'YlOrRd',
+            logScale: true,
+            tooltipContent: function (d) {
+                return d.id + ": " + d.value
+            }
+        })
+    }
+
+    circos.render();
+
+    d3.selectAll("path.chord").on("mouseover", handleMouseOver);
+    d3.selectAll("path.chord").on("mouseout", handleMouseOut);
+
+    d3.selectAll(".cs-layout path").on("mouseover", handleMouseOver);
+    d3.selectAll(".cs-layout path").on("mouseout", handleMouseOut);
 }
 
 
