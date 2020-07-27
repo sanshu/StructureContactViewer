@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"
+        integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+
+    <script src="https://d3js.org/d3.v5.js"></script>
+
+    <script src='https://cdn.rawgit.com/nicgirault/circosJS/v2/dist/circos.js'></script>
+    <script src="index.js"></script>
+    <style>
+        .highlighted {
+            stroke: width 5px;
+            stroke: red;
+            fill: red;
+            opacity: 1;
+        }
+
+        .range-wrap {
+            position: relative;
+            margin: 0 auto 3rem;
+        }
+
+        .range {
+            width: 100%;
+        }
+
+        .bubble {
+            background: lightgrey;
+            color: black;
+            padding: 4px 12px;
+            position: absolute;
+            border-radius: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .bubble::after {
+            content: "";
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: lightgrey;
+            top: -1px;
+            left: 50%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid p-4">
+        <div class="p-3 mb-2 bg-info text-white">
+            <h3>Steps:</h3>
+            <ol>
+                <li>Enter PDB ID (no chain) and clicl PARSE button. This will parse out PDB file and init chain
+                    selectors.</li>
+                <li>Select <ul><li>same chain to show distances between single chain residues</li><li> different chains for
+                    between-chain distances. </li></ul></li>
+                    
+                <li>Click DISPLAY to calculate distances and display chart. At this point program will show calculated
+                    min and max distances.</li>
+                <li>Adjust distance cutoff and click DISPLAY again to refresh chart. Default cutoffs: single chain - 5A, two chains - 30A</li>
+            </ol>
+        </div>
+        <h2 id="pdbtitle"></h2>
+        <div>
+            <div class="row">
+                <div class="col-3">
+                    <label for="pdbid">Enter PDB id</label>
+                </div>
+                <div class="col-4">
+                    <input type="text" class="form-control" id="pdbid" value="6W9C">
+                </div>
+                <div class="col-4">
+                    <button id="runBtn" type="submit" class="btn btn-primary mb-2">Parse</button>
+                </div>
+            </div>
+            <div class="row small ml-3">
+                Suggested PDBs (M.): <ul>
+                    <li>1ake_A -It’s closed conformation of adenylate kinase. And has three subdomains</li>
+                    <li>4ake_A is the open conformation.</li>
+                    <li>7brrB and 3iwmB - 3C-like proteinase from SARS-CoV
+                    </li>
+                </ul>
+
+            </div>
+
+            <div id="controls" class="p-2 border border-secondary">
+                <div class="row">
+                    <div class="col col-6">
+                        <form>
+                            <div class="form-group">
+                                <label for=" chain1">First chain:</label>
+                                <select id="chain1" class="form-control-sm">
+                                    <option></option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="chain2">Second chain (same as first for single-chain view)</label>
+
+                                <select id="chain2" class="form-control-sm ">
+                                    <option value="none">none</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="col col-6">
+                        <label for="maxDist">Distance cutoff:</label>
+                        <div class="range-wrap">
+                            <input id="maxDist" type="range" class="range" value="5" />
+                            <output class="bubble mt-4"></output>
+                        </div>
+                        <br />
+
+                        <span id="minmax"></span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-block" id="showBtn"
+                            type="submit">Display</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="chart" width="100%" align="center">
+    </div>
+</body>
+<script>
+
+    let chains; // chains for selected pdb
+    let maxDist = $("#maxDist")
+    let divId = "chart";
+    let pdbID;
+
+    $(document).ready(function () {
+
+        $("#controls").hide()
+
+        $("#runBtn").click(function () { runPDB() })
+        $("#showBtn").click(function () { showPDB() })
+
+        addBubbles()
+        runPDB()
+
+        $("#controls").show()
+
+    });
+
+    async function runPDB() {
+        pdbID = $("#pdbid").val();
+        chains = await prepare(pdbID)
+        if (chains)
+            console.log(chains)
+        else console.error("failed")
+    }
+
+    function showPDB() {
+        let selChains = [];
+        selChains[0] = $("#chain1").val();
+        selChains[1] = $("#chain2").val();
+        let dist = maxDist.val();
+        displayStructureContacts(pdbID, chains, divId, selChains, dist)
+    }
+
+    // const showSingle = function () {
+    //     displayStructureContacts(pdbid, "chart", false)
+    // }
+    // const showMultiple = function () {
+    //     displayStructureContacts(pdbid, "chart", true)
+    // }
+    // const showMultiple2 = function () {
+    //     displayStructureContacts(pdbid, "chart", true, ["A", "C"])
+    // }
+
+    // let pdbid = '6W9C'
+    // showSingle()
+
+    function addBubbles() {
+        const allRanges = document.querySelectorAll(".range-wrap");
+        allRanges.forEach(wrap => {
+            const range = wrap.querySelector(".range");
+            const bubble = wrap.querySelector(".bubble");
+
+            range.addEventListener("input", () => {
+                setBubble(range, bubble);
+            });
+            setBubble(range, bubble);
+        });
+
+        function setBubble(range, bubble) {
+            const val = range.value;
+            const min = range.min ? range.min : 0;
+            const max = range.max ? range.max : 100;
+            const newVal = Number(((val - min) * 100) / (max - min));
+            bubble.innerHTML = val;
+
+            // Sorta magic numbers based on size of the native UI thumb
+            bubble.style.left = `calc(${newVal}% + (${8 - newVal * 0.15}px))`;
+        }
+
+    }
+</script>
+
+</html>
